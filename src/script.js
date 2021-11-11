@@ -1,162 +1,173 @@
 import "./style.css";
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { GUI } from "three/examples/jsm/libs/dat.gui.module.js";
 
-console.log(THREE);
-console.log(GLTFLoader);
 
-let scene;
-let camera;
-let renderer;
-let room;
-let canvas = document.querySelector(".webgl");
-const canvasSize = document.querySelector(".canvas-container");
+let camera, scene, renderer;
 
-const init = () => {
-  scene = new THREE.Scene();
-  console.log(scene);
+			let isUserInteracting = false,
+				onPointerDownMouseX = 0, onPointerDownMouseY = 0,
+				lon = 0, onPointerDownLon = 0,
+				lat = 0, onPointerDownLat = 0,
+				phi = 0, theta = 0;
 
-  const axesHelper = new THREE.AxesHelper(2);
-  scene.add(axesHelper);
+			init();
+			animate();
 
-  /* Field of view - how wide you can see. A large number acts like a wide angle lense */
-  const fov = 40;
-  //Aspect ratio of browser window
-  const aspect = canvasSize.offsetWidth / canvasSize.offsetHeight;
-  //Near & far - range of distance between model and camera wherein model is visible
-  const near = 0.1;
-  const far = 1000;
+			function init() {
 
-  camera = new THREE.PerspectiveCamera(fov, aspect, near, far);
-  console.log(camera);
-  camera.position.set(0, 0, 25);
-  scene.add(camera);
+				const container = document.getElementById( 'container' );
 
-  renderer = new THREE.WebGLRenderer({
-    antialias: true,
-    //bg is transparent
-    alpha: true,
-    canvas: canvas,
-  });
-  renderer.setSize(canvasSize.offsetWidth, canvasSize.offsetHeight);
-  renderer.setPixelRatio(window.devicePixelRatio ? window.devicePixelRatio : 1);
-  renderer.autoClear = false;
-  //In three.js you need that 0x prefix before hex code
-  renderer.setClearColor(0x000000, 0.0);
+				camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 1100 );
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  //controls.target.y = 2;
-  controls.enableDamping = true;
+				scene = new THREE.Scene();
 
-  //Setup lights
-  //First argument is color, second is intensity
-  const ambientLight = new THREE.AmbientLight(0x404040, 2);
-  scene.add(ambientLight);
+				const geometry = new THREE.SphereGeometry( 500, 60, 40 );
+				// invert the geometry on the x-axis so that all of the faces point inward
+				geometry.scale( - 1, 1, 1 );
 
-  const spotLight1 = new THREE.SpotLight(0x1d27f0, 5);
-  //Spot from which light is emitted
-  spotLight1.position.set(6, 11, 6);
-  const spotLightHelper1 = new THREE.SpotLightHelper(spotLight1);
-  scene.add(spotLight1);
-  scene.add(spotLightHelper1);
+				const texture = new THREE.TextureLoader().load( 'panorama.jpg' );
+				const material = new THREE.MeshBasicMaterial( { map: texture } );
 
-  const spotLight2 = new THREE.SpotLight(0xf57d22, 2);
-  spotLight2.position.set(-10, 0, 12);
-  const spotLightHelper2 = new THREE.SpotLightHelper(spotLight2);
-  scene.add(spotLight2);
-  scene.add(spotLightHelper2);
+				const mesh = new THREE.Mesh( geometry, material );
 
-  //Backight
-  const spotLight3 = new THREE.SpotLight(0x1d27f0, 2);
-  spotLight3.position.set(-10, 18, -17);
-  const spotLightHelper3 = new THREE.SpotLightHelper(spotLight3);
-  scene.add(spotLight3);
-  scene.add(spotLightHelper3);
+				scene.add( mesh );
 
-  //Setup GUI
-  const gui = new GUI();
+				renderer = new THREE.WebGLRenderer();
+				renderer.setPixelRatio( window.devicePixelRatio );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				container.appendChild( renderer.domElement );
 
-  const blueLight = gui.addFolder("BlueLight");
-  //In argument axis, min, max and interval
-  blueLight.add(spotLight1.position, "x", -30, 30, 1);
-  blueLight.add(spotLight1.position, "y", -30, 30, 1);
-  blueLight.add(spotLight1.position, "z", -30, 30, 1);
+				container.style.touchAction = 'none';
+				container.addEventListener( 'pointerdown', onPointerDown );
 
-  const orangeLight = gui.addFolder("OrangeLight");
-  orangeLight.add(spotLight2.position, "x", -40, 40, 1);
-  orangeLight.add(spotLight2.position, "y", -40, 40, 1);
-  orangeLight.add(spotLight2.position, "z", -40, 40, 1);
+				document.addEventListener( 'wheel', onDocumentMouseWheel );
 
-  const backlight = gui.addFolder("Backlight");
-  backlight.add(spotLight3.position, "x", -40, 40, 1);
-  backlight.add(spotLight3.position, "y", -40, 40, 1);
-  backlight.add(spotLight3.position, "z", -40, 40, 1);
+				//
 
-  const cam = gui.addFolder("Camera");
-  cam.add(camera.position, "x", -40, 40, 1);
-  cam.add(camera.position, "y", -40, 40, 1);
-  cam.add(camera.position, "z", -40, 40, 1);
-  const cameraHelper = new THREE.CameraHelper(camera);
-  scene.add(cameraHelper);
+				document.addEventListener( 'dragover', function ( event ) {
 
-  const loader = new GLTFLoader();
-  loader.load("scene.glb", (glb) => {
-    //three model is inside children, storing model inside room variable
-    room = glb.scene.children[0];
-    room.rotation.y = Math.PI * 10;
-    room.scale.set(0.4, 0.4, 0.4);
-    room.position.set(0, -2, 0);
-    room.rotation.x = Math.PI / -3;
-    
-    const roomGUI = gui.addFolder("RoomPosition");
-    roomGUI.add(room.position, "x", -40, 40, 1);
-    roomGUI.add(room.position, "y", -40, 40, 1);
-    roomGUI.add(room.position, "z", -40, 40, 1);
-    scene.add(glb.scene);
-    console.log("glb mikä olet", glb);
-  });
-  animate();
-};
+					event.preventDefault();
+					event.dataTransfer.dropEffect = 'copy';
 
-const render = () => {
-  renderer.render(scene, camera);
-};
+				} );
 
-//Recursive function calling animate
-const animate = () => {
-  requestAnimationFrame(animate);
-  render();
-  //controls.update();
-};
+				document.addEventListener( 'dragenter', function () {
 
-//Responsive canvas for resizing window
-const windowResize = () => {
-  camera.aspect = canvasSize.offsetWidth / canvasSize.offsetHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(canvasSize.offsetWidth, canvasSize.offsetHeight);
-  render();
-};
+					document.body.style.opacity = 0.5;
 
-//Double clicking canvas enters or exits full screen
-canvas.addEventListener("dblclick", () => {
-  const fullscreenElement =
-    document.fullscreenElement || document.webkitFullscreenElement;
-  if (!fullscreenElement) {
-    if (canvas.requestFullscreen) {
-      canvas.requestFullscreen();
-    } else if (canvas.webkitRequestFullscreen) {
-      canvas.webkitRequestFullscreen();
-    }
-  } else {
-    if (document.exitFullscreen) {
-      document.exitFullscreen();
-    } else if (document.webkitExitFullscreen) {
-      document.webkitExitFullscreen();
-    }
-  }
-});
+				} );
 
-window.addEventListener("resize", windowResize, false);
-window.onload = init;
+				document.addEventListener( 'dragleave', function () {
+
+					document.body.style.opacity = 1;
+
+				} );
+
+				document.addEventListener( 'drop', function ( event ) {
+
+					event.preventDefault();
+
+					const reader = new FileReader();
+					reader.addEventListener( 'load', function ( event ) {
+
+						material.map.image.src = event.target.result;
+						material.map.needsUpdate = true;
+
+					} );
+					reader.readAsDataURL( event.dataTransfer.files[ 0 ] );
+
+					document.body.style.opacity = 1;
+
+				} );
+
+				//
+
+				window.addEventListener( 'resize', onWindowResize );
+
+			}
+
+			function onWindowResize() {
+
+				camera.aspect = window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( window.innerWidth, window.innerHeight );
+
+			}
+
+			function onPointerDown( event ) {
+
+				if ( event.isPrimary === false ) return;
+
+				isUserInteracting = true;
+
+				onPointerDownMouseX = event.clientX;
+				onPointerDownMouseY = event.clientY;
+
+				onPointerDownLon = lon;
+				onPointerDownLat = lat;
+
+				document.addEventListener( 'pointermove', onPointerMove );
+				document.addEventListener( 'pointerup', onPointerUp );
+
+			}
+
+			function onPointerMove( event ) {
+
+				if ( event.isPrimary === false ) return;
+
+				lon = ( onPointerDownMouseX - event.clientX ) * 0.1 + onPointerDownLon;
+				lat = ( event.clientY - onPointerDownMouseY ) * 0.1 + onPointerDownLat;
+
+			}
+
+			function onPointerUp() {
+
+				if ( event.isPrimary === false ) return;
+
+				isUserInteracting = false;
+
+				document.removeEventListener( 'pointermove', onPointerMove );
+				document.removeEventListener( 'pointerup', onPointerUp );
+
+			}
+
+			function onDocumentMouseWheel( event ) {
+
+				const fov = camera.fov + event.deltaY * 0.05;
+
+				camera.fov = THREE.MathUtils.clamp( fov, 10, 75 );
+
+				camera.updateProjectionMatrix();
+
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+				update();
+
+			}
+
+			function update() {
+
+				if ( isUserInteracting === false ) {
+
+					lon += 0.1;
+
+				}
+
+				lat = Math.max( - 85, Math.min( 85, lat ) );
+				phi = THREE.MathUtils.degToRad( 90 - lat );
+				theta = THREE.MathUtils.degToRad( lon );
+
+				const x = 500 * Math.sin( phi ) * Math.cos( theta );
+				const y = 500 * Math.cos( phi );
+				const z = 500 * Math.sin( phi ) * Math.sin( theta );
+
+				camera.lookAt( x, y, z );
+
+				renderer.render( scene, camera );
+
+			}
+
